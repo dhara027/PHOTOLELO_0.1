@@ -5,12 +5,18 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import apiClient from '@/api/apiClient';
 import { toast } from 'sonner';
 
 const CreateEvent = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
+
+  const [qrPreview, setQrPreview] = useState<string | null>(null);
+  const [eventUuid, setEventUuid] = useState<string | null>(null);
+  const [showModal, setShowModal] = useState(false);
+
   const [formData, setFormData] = useState({
     photographer_name: '',
     event_name: '',
@@ -31,74 +37,46 @@ const CreateEvent = () => {
 
     try {
       const response = await apiClient.post('/api/event/create', formData, {
-        responseType: 'blob', // Handle binary response (QR code PNG)
+        responseType: 'blob',
       });
-      
-      // Backend returns QR code PNG file
-      const qrCodeBlob = response.data;
-      
-      // Get event UUID from response headers
-      const eventUuid = response.headers['x-event-uuid'] || 
-                       response.headers['event-uuid'] ||
-                       response.headers['x-event-id'];
-      
-      // Download QR code
-      const url = window.URL.createObjectURL(qrCodeBlob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `event-qr-${eventUuid || Date.now()}.png`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
 
-      toast.success('Event created successfully! QR code downloaded.');
-      
-      // If UUID found in headers, redirect to upload page
-      if (eventUuid) {
-        navigate(`/dashboard/event/${eventUuid}/upload-photos`);
-      } else {
-        // Fallback: Make another call to get UUID (if backend supports it)
-        // Or redirect to dashboard
-        toast.info('Event created! Please check your events list.');
-        navigate('/dashboard');
-      }
+      const qrBlob = response.data;
+
+      const uuid =
+        response.headers['x-event-uuid'] ||
+        response.headers['event-uuid'] ||
+        response.headers['x-event-id'];
+
+      setEventUuid(uuid);
+
+      // Create preview URL
+      const qrUrl = window.URL.createObjectURL(qrBlob);
+      setQrPreview(qrUrl);
+
+      // Open modal
+      setShowModal(true);
+
+      toast.success("Event created successfully!");
+
     } catch (error: any) {
-      // If error, try to extract UUID from error response
-      if (error.response?.data) {
-        // Try to parse if it's a blob
-        if (error.response.data instanceof Blob) {
-          const text = await error.response.data.text();
-          try {
-            const jsonData = JSON.parse(text);
-            const eventUuid = jsonData.uuid || jsonData.id || jsonData.event_uuid;
-            if (eventUuid) {
-              toast.success('Event created! Redirecting...');
-              navigate(`/dashboard/event/${eventUuid}/upload-photos`);
-              return;
-            }
-          } catch {
-            // Not JSON, continue with error
-          }
-        } else if (typeof error.response.data === 'object') {
-          const eventUuid = error.response.data?.uuid || error.response.data?.id || error.response.data?.event_uuid;
-          if (eventUuid) {
-            toast.success('Event created! Redirecting...');
-            navigate(`/dashboard/event/${eventUuid}/upload-photos`);
-            return;
-          }
-        }
-      }
-      toast.error(error.response?.data?.message || error.message || 'Failed to create event');
+      toast.error(error.response?.data?.message || 'Failed to create event');
     } finally {
       setLoading(false);
     }
   };
 
+  const downloadQR = () => {
+    if (!qrPreview) return;
+    const link = document.createElement("a");
+    link.href = qrPreview;
+    link.download = `event-qr-${eventUuid}.png`;
+    link.click();
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted">
       <div className="container mx-auto px-4 py-8">
-        {/* Back Button */}
+
         <Button
           variant="ghost"
           onClick={() => navigate('/dashboard')}
@@ -108,9 +86,9 @@ const CreateEvent = () => {
           Back to Dashboard
         </Button>
 
-        {/* Centered Card */}
         <div className="flex items-center justify-center min-h-[calc(100vh-12rem)]">
           <Card className="w-full max-w-2xl shadow-xl">
+
             <CardHeader className="text-center space-y-2 pb-6">
               <div className="flex justify-center mb-4">
                 <div className="rounded-full bg-primary/10 p-3">
@@ -122,8 +100,11 @@ const CreateEvent = () => {
                 Add new event details
               </CardDescription>
             </CardHeader>
+
             <CardContent>
+
               <form onSubmit={handleSubmit} className="space-y-6">
+
                 {/* Photographer Name */}
                 <div className="space-y-2">
                   <Label htmlFor="photographer_name" className="flex items-center gap-2">
@@ -195,33 +176,64 @@ const CreateEvent = () => {
                   />
                 </div>
 
-                {/* Submit Button */}
+                {/* Buttons */}
                 <div className="flex gap-4 pt-4">
                   <Button
-                    type="button"
                     variant="outline"
-                    onClick={() => navigate('/dashboard')}
+                    type="button"
                     className="flex-1"
-                    disabled={loading}
+                    onClick={() => navigate('/dashboard')}
                   >
                     Cancel
                   </Button>
-                  <Button
-                    type="submit"
-                    className="flex-1"
-                    disabled={loading}
-                  >
+                  <Button type="submit" className="flex-1" disabled={loading}>
                     {loading ? 'Creating...' : 'Create Event'}
                   </Button>
                 </div>
+
               </form>
             </CardContent>
+
           </Card>
         </div>
+
       </div>
+
+      {/* QR Modal */}
+      <Dialog open={showModal} onOpenChange={setShowModal}>
+        <DialogContent className="max-w-sm text-center">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold">Event QR Code</DialogTitle>
+          </DialogHeader>
+
+          {qrPreview && (
+            <img
+              src={qrPreview}
+              alt="QR Code"
+              className="w-48 h-48 mx-auto border rounded-lg p-2 bg-white shadow"
+            />
+          )}
+
+          <DialogFooter className="flex flex-col gap-3 mt-4">
+            <Button onClick={downloadQR}>Download QR</Button>
+
+            {eventUuid && (
+              <Button
+                variant="default"
+                onClick={() => navigate(`/dashboard/event/${eventUuid}/upload-photos`)}
+              >
+                Go to Upload Photos
+              </Button>
+            )}
+
+            <Button variant="outline" onClick={() => navigate('/dashboard')}>
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
 
 export default CreateEvent;
-

@@ -9,11 +9,6 @@ const apiClient = axios.create({
   timeout: 10000, // 10 seconds timeout
 });
 
-// Custom event to notify auth context about token removal
-export const dispatchTokenRemoved = () => {
-  window.dispatchEvent(new CustomEvent('token-removed'));
-};
-
 // Request interceptor to add auth token
 apiClient.interceptors.request.use(
   (config) => {
@@ -41,8 +36,10 @@ apiClient.interceptors.response.use(
     // Handle 401 unauthorized
     if (error.response?.status === 401) {
       localStorage.removeItem('token');
-      // Dispatch custom event to notify auth context
-      dispatchTokenRemoved();
+      // Only redirect if not already on login page
+      if (window.location.pathname !== '/login') {
+        window.location.href = '/login';
+      }
     }
 
     // Return error with message
