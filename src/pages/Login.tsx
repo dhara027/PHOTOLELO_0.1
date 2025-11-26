@@ -63,7 +63,18 @@ const Login = () => {
                 required
               />
             </div>
+
+            {/* 🔥 Added Forgot Password Link */}
+            <div className="text-right">
+              <a
+                href="/forgot-password"
+                className="text-sm text-primary hover:underline"
+              >
+                Forgot Password?
+              </a>
+            </div>
           </CardContent>
+
           <CardFooter className="flex flex-col space-y-4">
             <Button type="submit" className="w-full" disabled={loading}>
               {loading ? 'Signing in...' : 'Sign In'}
